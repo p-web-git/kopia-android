@@ -15,26 +15,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.22.x'
+      # - name: Set up Go
+      #   uses: actions/setup-go@v5
+      #   with:
+      #     go-version: '1.22.x'
 
-      - name: Get Android NDK
-        run: |
-          wget https://dl.google.com/android/repository/${ANDROID_NDK_ZIP}
-          unzip -q ${ANDROID_NDK_ZIP}
+      # - name: Get Android NDK
+      #   run: |
+      #     wget https://dl.google.com/android/repository/${ANDROID_NDK_ZIP}
+      #     unzip -q ${ANDROID_NDK_ZIP}
 
       - name: Build Kopia (Android/arm64, CGO, netcgo)
+        env:
+          ANDROID_NDK: ${{ env.ANDROID_NDK }}
         run: |
-          export ANDROID_NDK="${PWD}/${ANDROID_NDK_DIR}"
           export CC="$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang"
           export CXX="$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang++"
           export GOOS=android GOARCH=arm64 CGO_ENABLED=1
-          mkdir -p "$GOBIN"
-          # netcgo ensures the cgo DNS resolver is used
-          go install -tags netcgo github.com/kopia/kopia@v0.21.1
-          ls -l "$GOBIN"
+          mkdir -p out
+          # Use go build (NOT go install) to avoid the GOBIN/cross-compile restriction.
+          go build -tags netcgo -trimpath -ldflags="-s -w" \
+            -o out/kopia github.com/kopia/kopia@v0.21.1
+          file out/kopia
 
       - name: Upload Android binary
         uses: actions/upload-artifact@v4
