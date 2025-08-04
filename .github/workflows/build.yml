@@ -1,9 +1,10 @@
-name: build-kopia-android
+name: build-and-release-kopia-android
+
 on:
   workflow_dispatch:
     inputs:
       kopia-version:
-        description: 'Kopia version (e.g. v0.21.1)'
+        description: 'Kopia version tag (e.g. v0.21.1)'
         required: true
         default: 'v0.21.1'
 
@@ -22,39 +23,40 @@ jobs:
         with:
           go-version: '1.22.x'
 
+      # Install the Android NDK (r28c) and expose the path as output
       - id: ndk
         uses: nttld/setup-ndk@v1
         with:
           ndk-version: r28c
 
-      - name: Verify toolchain
+      - name: Build Kopia (Android/arm64, CGO, netcgo)
+        env:
+          NDK: ${{ steps.ndk.outputs.ndk-path }}
+          KOPIA_VERSION: ${{ github.event.inputs.kopia-version }}
         run: |
-          echo "NDK path: ${{ steps.ndk.outputs.ndk-path }}"
-          ls -l "${{ steps.ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin" | head
-          test -x "${{ steps.ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang"
-
-      - name: Build Kopia (Android/arm64, CGO, netcgo) via go install
-        run: |
-          export NDK="${{ steps.ndk.outputs.ndk-path }}"
+          set -e
+          # ── Cross‑compiler paths ────────────────────────────────────────────
           export CC="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang"
-          export CXX="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang++"
+          export CXX="$CC++"
+
+          # ── Go cross‑compile env ────────────────────────────────────────────
           export GOOS=android
           export GOARCH=arm64
           export CGO_ENABLED=1
 
-          # IMPORTANT: unset GOBIN for cross-installs
-          env -u GOBIN go install -tags netcgo github.com/kopia/kopia@${{ github.event.inputs.kopia-version }}
+          # Unset GOBIN so go install accepts cross‑install
+          env -u GOBIN go install -tags netcgo github.com/kopia/kopia@${KOPIA_VERSION}
 
           BIN_DIR="$(go env GOPATH)/bin/${GOOS}_${GOARCH}"
           mkdir -p dist
           cp "$BIN_DIR/kopia" dist/kopia-android-arm64
-          (cd dist && sha256sum kopia-android-arm64 > kopia-android-arm64.sha256)
+          ( cd dist && sha256sum kopia-android-arm64 > kopia-android-arm64.sha256 )
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: kopia-android      # <-- artifact name consumed by next job
-          path: dist/*
+          name: kopia-android-artifact
+          path: dist/
 
   release:
     needs: build
