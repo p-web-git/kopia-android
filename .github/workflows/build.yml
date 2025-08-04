@@ -1,6 +1,11 @@
 name: build-kopia-android
 on:
   workflow_dispatch:
+    inputs:
+      kopia-version:
+        description: 'Kopia version (e.g. v0.21.1)'
+        required: true
+        default: 'v0.21.1'
 
 jobs:
   build:
@@ -35,16 +40,36 @@ jobs:
           export CGO_ENABLED=1
 
           # IMPORTANT: unset GOBIN for cross-installs
-          env -u GOBIN go install -tags netcgo github.com/kopia/kopia@v0.21.1
+          env -u GOBIN go install -tags netcgo github.com/kopia/kopia@${{ github.event.inputs.kopia-version }}
 
-          TARGET_BIN_DIR="$(go env GOPATH)/bin/${GOOS}_${GOARCH}"
-          ls -l "$TARGET_BIN_DIR"
-          mkdir -p out
-          cp "$TARGET_BIN_DIR/kopia" out/kopia
-          file out/kopia
+          BIN_DIR="$(go env GOPATH)/bin/${GOOS}_${GOARCH}"
+          mkdir -p dist
+          cp "$BIN_DIR/kopia" dist/kopia-android-arm64
+          (cd dist && sha256sum kopia-android-arm64 > kopia-android-arm64.sha256)
 
-      - name: Upload Android binary
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: kopia-android-arm64
-          path: out/kopia
+          name: kopia-android      # <-- artifact name consumed by next job
+          path: dist/*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build.outputs.artifact-name }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            kopia-android-arm64
+            kopia-android-arm64.sha256
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
