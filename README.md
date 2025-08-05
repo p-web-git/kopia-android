@@ -2,7 +2,7 @@
 
 ## Problem
 
-When trying to execute kopia on termux running on android 14, I was failing to connect to the repositiory because kopia failed to you the DNS from android. So when doing
+When trying to execute kopia on termux running on android 14, I was failing to connect to the repositiory because kopia failed to use the DNS from android. So when doing
 
 ``` bash
 $ kopia repositiory connect s3 \
