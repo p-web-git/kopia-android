@@ -6,7 +6,7 @@ on:
       kopia-version:
         description: 'Kopia version tag (e.g. v0.21.1)'
         required: true
-        default: 'v0.21.1'
+        default: 'v0.22.3'
 
 permissions:
   contents: write  # required for creating a GitHub Release
